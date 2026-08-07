@@ -3,9 +3,9 @@
   "name": "カメラレベル",
   "icons": [
     {
-      "src": "/icon.png",
+      "src": "/favicon-96x96.png",
       "type": "image/png",
-      "sizes": "192x192",
+      "sizes": "96x96",
       "purpose": "any maskable"
     }
   ],
