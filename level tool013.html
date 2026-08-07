@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+　　<!-- 
+  信号換算ツール (apc009i)
+  作成日: 2026-07-31
+  作成者: y kouichi (koyowa)
+   -->
+
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>リアルタイムカメラ水準器</title>
+    
+    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="manifest" href="/manifest.json">
+    
+    <style>
+        /* ==========================================================
+           これまでの機能メモ・コメント：
+           - スマホを壁に押し当てた状態での測定に対応
+           - 水平・垂直どちらのモードでも0度リセット（基準点設定）が有効
+           - 0度リセットボタンを押すと即時リセットされ、30秒後に自動再リセット
+           - 30秒自動リセット完了時に「ピピッ」と音声（音量調整可能）が鳴り、線が直線（0.0°）に戻る
+           - 傾き限度基準値（±60度）のクランプ制限で過度な暴走を防止
+           - グリッド線の太さや格子サイズ（80px等）を変更可能
+           ========================================================== */
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            font-family: sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #cameraVideo {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 10;
+        }
+
+        #capturedImage {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 15;
+            display: none;
+        }
+/* グリッド線の設定：PC・スマホで同じ感覚になるよう調整 */
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: 
+                linear-gradient(rgba(0, 255, 0, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 0, 0.3) 1px, transparent 1px);
+            background-size: 80px 80px; /* 1マスのサイズ */
+            background-position: 0 0;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        /* 赤い基準線：PCでもスマホでも完全に同じ位置・同じ長さにする */
+        #levelLine {
+            position: fixed;
+            /* 画面の高さに対する割合（%）ではなく、ピクセル（px）指定にすると両方で同じ位置になります。
+               例: 画面の上から 500px の位置に固定したい場合 */
+            top: 400px; 
+            left: 800Px;
+            /* 画面幅にかかわらず、長さを固定（例: 800px）にするとPC・スマホで同じ見た目になります */
+            width: 800px; 
+            height: 3px;
+            background-color: red;
+            z-index: 25;
+            pointer-events: none;
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+            transform-origin: center center;
+            transform: translate(-50%, -50%);
+        }
+        
+
+        
+
+        .control-panel {
+            position: fixed;
+            right: 15px;
+            bottom: 20px;
+            z-index: 100000;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+        .btn {
+            background: #ffffff;
+            color: #000000;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 6px;
+            text-decoration: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            cursor: pointer;
+            border: none;
+            white-space: nowrap;
+        }
+        .btn-sensor { background: #ffcc00; }
+        .btn-mode { background: #00bcd4; color: #fff; display: none; }
+        .btn-reset-zero { background: #ff9800; color: #fff; display: none; }
+        .btn-capture { background: #00ffcc; display: none; }
+        
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 15px;
+            z-index: 100000;
+            font-size: 15px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.85);
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.4);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <img id="capturedImage" alt="撮影画像">
+
+    <div class="grid-overlay"></div>
+    <div id="levelLine"></div>
+    <div id="info">未開始 </div>
+
+    <div class="control-panel">
+        <button id="startSensorBtn" class="btn btn-sensor">📡 カメラ＆センサー有効化</button>
+        <button id="modeBtn" class="btn btn-mode">📐 表示: 水平線</button>
+        <button id="zeroBtn" class="btn btn-reset-zero">🎯 0度リセット</button>
+        <button id="captureBtn" class="btn btn-capture">📷 撮影</button>
+        <button id="resetBtn" class="btn" style="display:none; background:#ff4444; color:#fff;">🔄 再撮影</button>
+    </div>
+
+    <canvas id="snapshotCanvas" style="display:none;"></canvas>
+
+    <script>
+        const cameraVideo = document.getElementById('cameraVideo');
+        const capturedImage = document.getElementById('capturedImage');
+        const levelLine = document.getElementById('levelLine');
+        const info = document.getElementById('info');
+        const startSensorBtn = document.getElementById('startSensorBtn');
+        const modeBtn = document.getElementById('modeBtn');
+        const zeroBtn = document.getElementById('zeroBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const snapshotCanvas = document.getElementById('snapshotCanvas');
+
+        let baseBeta = null;
+        let baseGamma = null;
+        let stream = null;
+        let currentMode = 'horizontal'; 
+
+        let smoothedBeta = 0;
+        let smoothedGamma = 0;
+        let currentRawBeta = 0;
+        let currentRawGamma = 0;
+        let lastEventTime = Date.now();
+        let autoZeroTimer = null;
+
+        // 🔊 0度リセット完了時の音声（音量は gainNode.gain で調整可能。例: 0.5 = 50%）
+        function playBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
+                gainNode.gain.setValueAtTime(1.0, audioCtx.currentTime); // 音量設定　0.5→1.0
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.15); 
+            } catch (e) {
+                console.log("音声再生非対応環境");
+            }
+        }
+
+        startSensorBtn.addEventListener('click', async () => {
+            try {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (e) {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                }
+
+                cameraVideo.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    cameraVideo.onloadedmetadata = () => resolve();
+                    setTimeout(resolve, 1000);
+                });
+
+                await cameraVideo.play();
+
+                startSensorBtn.style.display = 'none';
+                captureBtn.style.display = 'inline-block';
+                modeBtn.style.display = 'inline-block';
+                zeroBtn.style.display = 'inline-block';
+
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    if (response === 'granted') {
+                        activateSensor();
+                    } else {
+                        alert("センサーのアクセスが拒否されました。");
+                    }
+                } else {
+                    activateSensor();
+                }
+
+            } catch (err) {
+                alert("カメラを起動できませんでした: " + err.message);
+            }
+        });
+
+        modeBtn.addEventListener('click', () => {
+            if (currentMode === 'horizontal') {
+                currentMode = 'vertical';
+                modeBtn.textContent = '📐 表示: 垂直線';
+            } else {
+                currentMode = 'horizontal';
+                modeBtn.textContent = '📐 表示: 水平線';
+            }
+            updateLineAndDisplay();
+        });
+
+        // 🎯 0度リセットボタン（即時リセット ＋ 10秒後自動再リセット ＆ ピピッ音）
+        zeroBtn.addEventListener('click', () => {
+            executeZeroReset();
+
+            if (autoZeroTimer) clearTimeout(autoZeroTimer);
+
+            zeroBtn.style.background = '#00ffcc';
+            zeroBtn.textContent = '⏳ 10秒後自動リセット中...';
+
+            // 10秒後に自動で再度0度リセットを実行
+            autoZeroTimer = setTimeout(() => {
+                executeZeroReset();
+                playBeep(); // 完了音を鳴らす
+                zeroBtn.style.background = '#ff9800';
+                zeroBtn.textContent = '🎯 0度リセット';
+            }, 10000); // 10秒
+        });
+
+        function executeZeroReset() {
+            baseBeta = currentRawBeta;
+            baseGamma = currentRawGamma;
+            smoothedBeta = 0;
+            smoothedGamma = 0;
+            info.style.borderColor = '#00ffcc';
+            setTimeout(() => { info.style.borderColor = 'rgba(255,255,255,0.4)'; }, 500);
+            updateLineAndDisplay();
+        }
+
+        function activateSensor() {
+            info.textContent = '計測中...';
+
+            window.addEventListener('deviceorientation', (event) => {
+                let gamma = event.gamma; 
+                let beta = event.beta;   
+
+                if (gamma != null && beta != null) {
+                    lastEventTime = Date.now();
+                    currentRawGamma = gamma;
+                    currentRawBeta = beta;
+
+                    if (baseBeta === null || baseGamma === null) {
+                        baseBeta = beta;
+                        baseGamma = gamma;
+                    }
+
+                    let diffGamma = gamma - baseGamma;
+                    let diffBeta = beta - baseBeta;
+
+                    // 💡 傾き限度基準値（クランプ制限：±60度→±45度）
+                    const LIMIT_ANGLE = 45;
+                    if (diffGamma > LIMIT_ANGLE) diffGamma = LIMIT_ANGLE;
+                    if (diffGamma < -LIMIT_ANGLE) diffGamma = -LIMIT_ANGLE;
+                    if (diffBeta > LIMIT_ANGLE) diffBeta = LIMIT_ANGLE;
+                    if (diffBeta < -LIMIT_ANGLE) diffBeta = -LIMIT_ANGLE;
+
+                    // 手振れ補正（0.015→0.05）
+                    smoothedGamma += (diffGamma - smoothedGamma) * 0.05;
+                    smoothedBeta += (diffBeta - smoothedBeta) * 0.05;
+
+                    updateLineAndDisplay();
+                }
+            });
+
+            setInterval(() => {
+                if (Date.now() - lastEventTime > 1000) {
+                    smoothedGamma = 0;
+                    smoothedBeta = 0;
+                    baseBeta = currentRawBeta;
+                    baseGamma = currentRawGamma;
+                }
+            }, 500);
+        }
+
+        // 数値と線の連動（支点・位置を保ったまま回転）
+        function updateLineAndDisplay() {
+            let horizVal = Math.round(smoothedGamma * 10) / 10;
+            let vertVal = Math.round(smoothedBeta * 10) / 10;
+
+            if (currentMode === 'horizontal') {
+                levelLine.style.width = '100vw';
+                levelLine.style.height = '3px';
+                // 支点を中心にしつつ、回転角度を反映
+                levelLine.style.transform = `translate(-50%, -50%) rotate(${smoothedGamma}deg)`;
+            } else {
+                levelLine.style.width = '3px';
+                levelLine.style.height = '100vh';
+                // 支点を中心にしつつ、回転角度を反映
+                levelLine.style.transform = `translate(-50%, -50%) rotate(${smoothedBeta}deg)`;
+            }
+
+            info.innerHTML = `
+                水平ズレ: ${horizVal > 0 ? '+' : ''}${horizVal}°<br>
+                垂直ズレ: ${vertVal > 0 ? '+' : ''}${vertVal}°
+            `;
+        }
+
+        captureBtn.addEventListener('click', () => {
+            snapshotCanvas.width = cameraVideo.videoWidth || window.innerWidth;
+            snapshotCanvas.height = cameraVideo.videoHeight || window.innerHeight;
+            const ctx = snapshotCanvas.getContext('2d');
+            ctx.drawImage(cameraVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+            
+            capturedImage.src = snapshotCanvas.toDataURL('image/png');
+            capturedImage.style.display = 'block';
+
+            captureBtn.style.display = 'none';
+            modeBtn.style.display = 'none';
+            zeroBtn.style.display = 'none';
+            resetBtn.style.display = 'inline-block';
+        });
+
+        resetBtn.addEventListener('click', () => {
+            capturedImage.style.display = 'none';
+            resetBtn.style.display = 'none';
+            captureBtn.style.display = 'inline-block';
+            modeBtn.style.display = 'inline-block';
+            zeroBtn.style.display = 'inline-block';
+        });
+    </script>
+</body>
+</html>
