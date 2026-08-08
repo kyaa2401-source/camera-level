@@ -386,6 +386,44 @@
             modeBtn.style.display = 'inline-block';
             zeroBtn.style.display = 'inline-block';
         });
+        // 🖐️ グリッド線を指でドラッグして動かせるようにする機能
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let lineX = window.innerWidth / 2;
+        let lineY = window.innerHeight / 2;
+
+        levelLine.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            const touch = e.touches[0];
+            startX = touch.clientX - lineX;
+            startY = touch.clientY - lineY;
+            e.preventDefault(); // 画面全体のスクロールを防ぐ
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const touch = e.touches[0];
+        
+            if (currentMode === 'horizontal') {
+                // 水平モードの時は上下に動かす
+                lineY = touch.clientY - startY;
+                levelLine.style.top = `${lineY}px`;
+                levelLine.style.left = '50%';
+            } else {
+                // 垂直モードの時は左右に動かす
+                lineX = touch.clientX - startX;
+                levelLine.style.left = `${lineX}px`;
+                levelLine.style.top = '50%';
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            isDragging = false;
+        });
+
+          // モード（水平／垂直）が切り替わったときに位置を画面中央に戻したい場合は、modeBtnの処理に追加することもできます        
     </script>
     <script>
       if ('serviceWorker' in navigator) {
