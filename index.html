@@ -76,23 +76,12 @@
             pointer-events: none;
         }
 
-        /* 赤い基準線：PCでもスマホでも完全に同じ位置・同じ長さにする */
+        
         #levelLine {
-            position: fixed;
-            /* 画面の高さに対する割合（%）ではなく、ピクセル（px）指定にすると両方で同じ位置になります。
-               例: 画面の上から 500px の位置に固定したい場合 */
-            top: 53%; 
-            left: 50%;
-            /* 画面幅にかかわらず、長さを固定（例: 800px）にするとPC・スマホで同じ見た目になります */
-            width: 800px; 
-            height: 3px;
-            background-color: red;
-            z-index: 25;
-            pointer-events: none;
-            box-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
-            transform-origin: center center;
-            transform: translate(-50%, -50%);
-            display: block;
+             position: absolute;
+             background-color: #ff0055; /* 線の色 */
+             pointer-events: auto; /* ★ここを 'auto' にすると指で触りやすくなります */
+             z-index: 10;
         }
         
 
@@ -386,42 +375,47 @@
             modeBtn.style.display = 'inline-block';
             zeroBtn.style.display = 'inline-block';
         });
-        // 🖐️ グリッド線を指でドラッグして動かせるようにする機能
-        let isDragging = false;
-        let startX = 0;
-        let startY = 0;
-        let lineX = window.innerWidth / 2;
-        let lineY = window.innerHeight / 2;
+         // 🖐️ グリッド線を指でドラッグして動かせるようにする機能（改良版）
+          let isDragging = false;
+          let startY = 0;
+          let startX = 0;
+          let currentLineTop = window.innerHeight / 2;
+          let currentLineLeft = window.innerWidth / 2;
 
-        levelLine.addEventListener('touchstart', (e) => {
-            isDragging = true;
-            const touch = e.touches[0];
-            startX = touch.clientX - lineX;
-            startY = touch.clientY - lineY;
-            e.preventDefault(); // 画面全体のスクロールを防ぐ
-        }, { passive: false });
+          levelLine.addEventListener('touchstart', (e) => {
+              isDragging = true;
+              const touch = e.touches[0];
+              startY = touch.clientY - currentLineTop;
+              startX = touch.clientX - currentLineLeft;
+              e.preventDefault();
+         }, { passive: false });
 
         window.addEventListener('touchmove', (e) => {
             if (!isDragging) return;
             const touch = e.touches[0];
         
             if (currentMode === 'horizontal') {
-                // 水平モードの時は上下に動かす
-                lineY = touch.clientY - startY;
-                levelLine.style.top = `${lineY}px`;
-                levelLine.style.left = '50%';
-            } else {
-                // 垂直モードの時は左右に動かす
-                lineX = touch.clientX - startX;
-                levelLine.style.left = `${lineX}px`;
-                levelLine.style.top = '50%';
+                currentLineTop = touch.clientY - startY;
+                levelLine.style.top = `${currentLineTop}px`;
+                levelLine.style.left = '0px';
+                levelLine.style.width = '100vw';
+             levelLine.style.height = '3px';
+              // 中央基準のtransformを解除してtop指定で動かす
+              levelLine.style.transform = `rotate(${smoothedGamma}deg)`;
+           } else {
+               currentLineLeft = touch.clientX - startX;
+               levelLine.style.left = `${currentLineLeft}px`;
+               levelLine.style.top = '0px';
+               levelLine.style.width = '3px';
+               levelLine.style.height = '100vh';
+               levelLine.style.transform = `rotate(${smoothedBeta}deg)`;
             }
             e.preventDefault();
-        }, { passive: false });
+         }, { passive: false });
 
-        window.addEventListener('touchend', () => {
-            isDragging = false;
-        });
+         window.addEventListener('touchend', () => {
+             isDragging = false;
+        }); 
 
           // モード（水平／垂直）が切り替わったときに位置を画面中央に戻したい場合は、modeBtnの処理に追加することもできます        
     </script>
