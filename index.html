@@ -78,10 +78,15 @@
 
         
         #levelLine {
-             position: absolute;
-             background-color: #ff0055; /* 線の色 */
-             pointer-events: auto; /* ★ここを 'auto' にすると指で触りやすくなります */
-             z-index: 10;
+           position: absolute;
+           top: 50%;
+           left: 50%;
+           width: 100vw;
+           height: 3px;
+           background-color: #ff0055;
+           transform: translate(-50%, -50%);
+           pointer-events: none;
+           z-index: 10;
         }
         
 
@@ -375,47 +380,7 @@
             modeBtn.style.display = 'inline-block';
             zeroBtn.style.display = 'inline-block';
         });
-         // 🖐️ グリッド線を指でドラッグして動かせるようにする機能（改良版）
-          let isDragging = false;
-          let startY = 0;
-          let startX = 0;
-          let currentLineTop = window.innerHeight / 2;
-          let currentLineLeft = window.innerWidth / 2;
-
-          levelLine.addEventListener('touchstart', (e) => {
-              isDragging = true;
-              const touch = e.touches[0];
-              startY = touch.clientY - currentLineTop;
-              startX = touch.clientX - currentLineLeft;
-              e.preventDefault();
-         }, { passive: false });
-
-        window.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            const touch = e.touches[0];
-        
-            if (currentMode === 'horizontal') {
-                currentLineTop = touch.clientY - startY;
-                levelLine.style.top = `${currentLineTop}px`;
-                levelLine.style.left = '0px';
-                levelLine.style.width = '100vw';
-             levelLine.style.height = '3px';
-              // 中央基準のtransformを解除してtop指定で動かす
-              levelLine.style.transform = `rotate(${smoothedGamma}deg)`;
-           } else {
-               currentLineLeft = touch.clientX - startX;
-               levelLine.style.left = `${currentLineLeft}px`;
-               levelLine.style.top = '0px';
-               levelLine.style.width = '3px';
-               levelLine.style.height = '100vh';
-               levelLine.style.transform = `rotate(${smoothedBeta}deg)`;
-            }
-            e.preventDefault();
-         }, { passive: false });
-
-         window.addEventListener('touchend', () => {
-             isDragging = false;
-        }); 
+          
 
           // モード（水平／垂直）が切り替わったときに位置を画面中央に戻したい場合は、modeBtnの処理に追加することもできます        
     </script>
