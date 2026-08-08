@@ -79,7 +79,7 @@
         
         #levelLine {
            position: absolute;
-           top: 50%;
+           top: 53%;
            left: 50%;
            width: 100vw;
            height: 3px;
@@ -90,7 +90,7 @@
         }
         
 
-        
+      
 
         .control-panel {
             position: fixed;
@@ -262,22 +262,22 @@
             updateLineAndDisplay();
         });
 
-        // 🎯 0度リセットボタン（即時リセット ＋ 10秒後自動再リセット ＆ ピピッ音）
+        // 🎯 0度リセットボタン（即時リセット ＋ 3秒後自動再リセット ＆ ピピッ音）
         zeroBtn.addEventListener('click', () => {
             executeZeroReset();
 
             if (autoZeroTimer) clearTimeout(autoZeroTimer);
 
             zeroBtn.style.background = '#00ffcc';
-            zeroBtn.textContent = '⏳ 10秒後自動リセット中...';
+            zeroBtn.textContent = '⏳ 3秒後自動リセット中...';
 
-            // 10秒後に自動で再度0度リセットを実行
+            // 3秒後に自動で再度0度リセットを実行
             autoZeroTimer = setTimeout(() => {
                 executeZeroReset();
                 playBeep(); // 完了音を鳴らす
                 zeroBtn.style.background = '#ff9800';
                 zeroBtn.textContent = '🎯 0度リセット';
-            }, 10000); // 10秒
+            }, 3000); // 3秒
         });
 
         function executeZeroReset() {
