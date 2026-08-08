@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-　　<!-- 
+<!-- 
   リアルタイムカメラ水準器
   作成日: 2026-07-31
   作成者: y kouichi (koyowa)
-   -->
+-->
 
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>リアルタイムカメラ水準器</title>
     
     <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
@@ -17,18 +17,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     
-    
     <style>
-        /* ==========================================================
-           これまでの機能メモ・コメント：
-           - スマホを壁に押し当てた状態での測定に対応
-           - 水平・垂直どちらのモードでも0度リセット（基準点設定）が有効
-           - 0度リセットボタンを押すと即時リセットされ、30秒後に自動再リセット
-           - 30秒自動リセット完了時に「ピピッ」と音声（音量調整可能）が鳴り、線が直線（0.0°）に戻る
-           - 傾き限度基準値（±60度）のクランプ制限で過度な暴走を防止
-           - グリッド線の太さや格子サイズ（80px等）を変更可能
-           ========================================================== */
-
         body {
             margin: 0;
             padding: 0;
@@ -40,6 +29,7 @@
             height: 100vh;
         }
 
+        /* 📹 カメラ映像：全画面ぴったり表示 */
         #cameraVideo {
             position: fixed;
             top: 0;
@@ -60,7 +50,8 @@
             z-index: 15;
             display: none;
         }
-/* グリッド線の設定：PC・スマホで同じ感覚になるよう調整 */
+
+        /* 🏁 グリッド線（80px間隔） */
         .grid-overlay {
             position: fixed;
             top: 0;
@@ -70,27 +61,25 @@
             background-image: 
                 linear-gradient(rgba(0, 255, 0, 0.3) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0, 255, 0, 0.3) 1px, transparent 1px);
-            background-size: 80px 80px; /* 1マスのサイズ */
-            background-position: 0 0;
+            background-size: 80px 80px;
+            background-position: center center;
             z-index: 20;
             pointer-events: none;
         }
 
-        
+        /* 🎯 赤い基準線（JavaScriptから位置をピクセル単位で動かせるように設定） */
         #levelLine {
-           position: absolute;
-           top: 53%;
-           left: 50%;
-           width: 100vw;
-           height: 3px;
-           background-color: #ff0055;
-           transform: translate(-50%, -50%);
-           pointer-events: none;
-           z-index: 10;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 100vw;
+            height: 3px;
+            background-color: #ff0055;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 30;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
         }
-        
-
-      
 
         .control-panel {
             position: fixed;
@@ -100,8 +89,9 @@
             display: flex;
             flex-direction: column;
             align-items: flex-end;
-            gap: 8px;
+            gap: 6px;
         }
+
         .btn {
             background: #ffffff;
             color: #000000;
@@ -117,6 +107,7 @@
         }
         .btn-sensor { background: #ffcc00; }
         .btn-mode { background: #00bcd4; color: #fff; display: none; }
+        .btn-move { background: #e91e63; color: #fff; display: none; font-size: 12px; padding: 6px 10px; }
         .btn-reset-zero { background: #ff9800; color: #fff; display: none; }
         .btn-capture { background: #00ffcc; display: none; }
         
@@ -143,18 +134,21 @@
 
     <div class="grid-overlay"></div>
     <div id="levelLine"></div>
-    <div id="info">未開始 </div>
+    <div id="info">未開始</div>
 
     <div class="control-panel">
         <button id="startSensorBtn" class="btn btn-sensor">📡 カメラ＆センサー有効化</button>
         <button id="modeBtn" class="btn btn-mode">📐 表示: 水平線</button>
+        <!-- ↕️ グリッド合わせ用の微調整ボタン -->
+        <button id="movePlusBtn" class="btn btn-move">⬆️ 上へ (グリッド合わせ)</button>
+        <button id="moveMinusBtn" class="btn btn-move">⬇️ 下へ (グリッド合わせ)</button>
         <button id="zeroBtn" class="btn btn-reset-zero">🎯 0度リセット</button>
         <button id="captureBtn" class="btn btn-capture">📷 撮影</button>
         <button id="resetBtn" class="btn" style="display:none; background:#ff4444; color:#fff;">🔄 再撮影</button>
     </div>
 
     <canvas id="snapshotCanvas" style="display:none;"></canvas>
-
+     
     <script>
         const cameraVideo = document.getElementById('cameraVideo');
         const capturedImage = document.getElementById('capturedImage');
@@ -162,6 +156,8 @@
         const info = document.getElementById('info');
         const startSensorBtn = document.getElementById('startSensorBtn');
         const modeBtn = document.getElementById('modeBtn');
+        const movePlusBtn = document.getElementById('movePlusBtn');
+        const moveMinusBtn = document.getElementById('moveMinusBtn');
         const zeroBtn = document.getElementById('zeroBtn');
         const captureBtn = document.getElementById('captureBtn');
         const resetBtn = document.getElementById('resetBtn');
@@ -179,7 +175,9 @@
         let lastEventTime = Date.now();
         let autoZeroTimer = null;
 
-        // 🔊 0度リセット完了時の音声（音量は gainNode.gain で調整可能。例: 0.5 = 50%）
+        // グリッド線（80px）に合わせた位置オフセット
+        let lineOffset = 0; 
+
         function playBeep() {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -188,7 +186,7 @@
                 
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
-                gainNode.gain.setValueAtTime(1.0, audioCtx.currentTime); // 音量設定　0.5→1.0
+                gainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
                 
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
@@ -233,6 +231,8 @@
                 startSensorBtn.style.display = 'none';
                 captureBtn.style.display = 'inline-block';
                 modeBtn.style.display = 'inline-block';
+                movePlusBtn.style.display = 'inline-block';
+                moveMinusBtn.style.display = 'inline-block';
                 zeroBtn.style.display = 'inline-block';
 
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -255,14 +255,30 @@
             if (currentMode === 'horizontal') {
                 currentMode = 'vertical';
                 modeBtn.textContent = '📐 表示: 垂直線';
+                movePlusBtn.textContent = '⬅️ 左へ (グリッド合わせ)';
+                moveMinusBtn.textContent = '➡️ 右へ (グリッド合わせ)';
             } else {
                 currentMode = 'horizontal';
                 modeBtn.textContent = '📐 表示: 水平線';
+                movePlusBtn.textContent = '⬆️ 上へ (グリッド合わせ)';
+                moveMinusBtn.textContent = '⬇️ 下へ (グリッド合わせ)';
             }
+            lineOffset = 0; // モード切替時にオフセットをリセット
             updateLineAndDisplay();
         });
 
-        // 🎯 0度リセットボタン（即時リセット ＋ 3秒後自動再リセット ＆ ピピッ音）
+        // ⬆️ / ⬅️ ボタン（10pxずつ移動、グリッド80pxの途中に合わせやすい）
+        movePlusBtn.addEventListener('click', () => {
+            lineOffset -= 10;
+            updateLineAndDisplay();
+        });
+
+        // ⬇️ / ➡️ ボタン
+        moveMinusBtn.addEventListener('click', () => {
+            lineOffset += 10;
+            updateLineAndDisplay();
+        });
+
         zeroBtn.addEventListener('click', () => {
             executeZeroReset();
 
@@ -271,13 +287,12 @@
             zeroBtn.style.background = '#00ffcc';
             zeroBtn.textContent = '⏳ 3秒後自動リセット中...';
 
-            // 3秒後に自動で再度0度リセットを実行
             autoZeroTimer = setTimeout(() => {
                 executeZeroReset();
-                playBeep(); // 完了音を鳴らす
+                playBeep();
                 zeroBtn.style.background = '#ff9800';
                 zeroBtn.textContent = '🎯 0度リセット';
-            }, 3000); // 3秒
+            }, 3000);
         });
 
         function executeZeroReset() {
@@ -310,14 +325,12 @@
                     let diffGamma = gamma - baseGamma;
                     let diffBeta = beta - baseBeta;
 
-                    // 💡 傾き限度基準値（クランプ制限：±60度→±45度）
                     const LIMIT_ANGLE = 45;
                     if (diffGamma > LIMIT_ANGLE) diffGamma = LIMIT_ANGLE;
                     if (diffGamma < -LIMIT_ANGLE) diffGamma = -LIMIT_ANGLE;
                     if (diffBeta > LIMIT_ANGLE) diffBeta = LIMIT_ANGLE;
                     if (diffBeta < -LIMIT_ANGLE) diffBeta = -LIMIT_ANGLE;
 
-                    // 手振れ補正（0.015→0.05）
                     smoothedGamma += (diffGamma - smoothedGamma) * 0.05;
                     smoothedBeta += (diffBeta - smoothedBeta) * 0.05;
 
@@ -335,7 +348,7 @@
             }, 500);
         }
 
-        // 数値と線の連動（支点・位置を保ったまま回転）
+        // 📐 線をグリッドに合わせてオフセット（移動）させながら回転
         function updateLineAndDisplay() {
             let horizVal = Math.round(smoothedGamma * 10) / 10;
             let vertVal = Math.round(smoothedBeta * 10) / 10;
@@ -343,13 +356,13 @@
             if (currentMode === 'horizontal') {
                 levelLine.style.width = '100vw';
                 levelLine.style.height = '3px';
-                // 支点を中心にしつつ、回転角度を反映
-                levelLine.style.transform = `translate(-50%, -50%) rotate(${smoothedGamma}deg)`;
+                // center基準（50%）から lineOffset（px）だけ上下にずらす
+                levelLine.style.transform = `translate(-50%, calc(-50% + ${lineOffset}px)) rotate(${smoothedGamma}deg)`;
             } else {
                 levelLine.style.width = '3px';
                 levelLine.style.height = '100vh';
-                // 支点を中心にしつつ、回転角度を反映
-                levelLine.style.transform = `translate(-50%, -50%) rotate(${smoothedBeta}deg)`;
+                // center基準（50%）から lineOffset（px）だけ左右にずらす
+                levelLine.style.transform = `translate(calc(-50% + ${lineOffset}px), -50%) rotate(${smoothedBeta}deg)`;
             }
 
             info.innerHTML = `
@@ -369,6 +382,8 @@
 
             captureBtn.style.display = 'none';
             modeBtn.style.display = 'none';
+            movePlusBtn.style.display = 'none';
+            moveMinusBtn.style.display = 'none';
             zeroBtn.style.display = 'none';
             resetBtn.style.display = 'inline-block';
         });
@@ -378,18 +393,18 @@
             resetBtn.style.display = 'none';
             captureBtn.style.display = 'inline-block';
             modeBtn.style.display = 'inline-block';
+            movePlusBtn.style.display = 'inline-block';
+            moveMinusBtn.style.display = 'inline-block';
             zeroBtn.style.display = 'inline-block';
         });
-          
-
-          // モード（水平／垂直）が切り替わったときに位置を画面中央に戻したい場合は、modeBtnの処理に追加することもできます        
     </script>
+
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
     </script>
 </body>
 </html>
