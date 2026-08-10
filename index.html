@@ -1,410 +1,142 @@
 <!DOCTYPE html>
-<!-- 
-  リアルタイムカメラ水準器
-  作成日: 2026-07-31
-  作成者: y kouichi (koyowa)
--->
-
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>リアルタイムカメラ水準器</title>
-    
-    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/site.webmanifest" />
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>精密勾配計測ツール</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            color: #fff;
-            font-family: sans-serif;
-            overflow: hidden;
-            width: 100vw;
-            height: 100vh;
-        }
-
-        /* 📹 カメラ映像：全画面ぴったり表示 */
-        #cameraVideo {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            z-index: 10;
-        }
-
-        #capturedImage {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            z-index: 15;
-            display: none;
-        }
-
-        /* 🏁 グリッド線（80px間隔） */
-        .grid-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-image: 
-                linear-gradient(rgba(0, 255, 0, 0.3) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 0, 0.3) 1px, transparent 1px);
-            background-size: 80px 80px;
-            background-position: center center;
-            z-index: 20;
-            pointer-events: none;
-        }
-
-        /* 🎯 赤い基準線（JavaScriptから位置をピクセル単位で動かせるように設定） */
-        #levelLine {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            width: 100vw;
-            height: 3px;
-            background-color: #ff0055;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 30;
-            box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
-        }
-
-        .control-panel {
-            position: fixed;
-            right: 15px;
-            bottom: 20px;
-            z-index: 100000;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 6px;
-        }
-
-        .btn {
-            background: #ffffff;
-            color: #000000;
-            padding: 8px 14px;
-            font-size: 13px;
-            font-weight: bold;
-            border-radius: 6px;
-            text-decoration: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-            cursor: pointer;
-            border: none;
-            white-space: nowrap;
-        }
-        .btn-sensor { background: #ffcc00; }
-        .btn-mode { background: #00bcd4; color: #fff; display: none; }
-        .btn-move { background: #e91e63; color: #fff; display: none; font-size: 12px; padding: 6px 10px; }
-        .btn-reset-zero { background: #ff9800; color: #fff; display: none; }
-        .btn-capture { background: #00ffcc; display: none; }
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; touch-action: none; }
         
-        #info {
-            position: fixed;
-            bottom: 20px;
-            left: 15px;
-            z-index: 100000;
-            font-size: 15px;
-            font-weight: bold;
-            background: rgba(0,0,0,0.85);
-            padding: 10px 14px;
-            border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.4);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-            line-height: 1.5;
-        }
+        /* 撮影した画像 (一番下) */
+        #displayImg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: contain; z-index: 10; pointer-events: none; }
+        
+        /* グリッド (その上) */
+        .grid-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-image: linear-gradient(rgba(0, 255, 0, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 0, 0.4) 1px, transparent 1px); background-size: 80px 80px; z-index: 20; pointer-events: none; }
+        
+        /* 描画キャンバス：一番手前にして、タッチを確実に受け取る (pointer-eventsを有効化) */
+        #drawCanvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 30; pointer-events: auto; touch-action: none; }
+        
+        #status { position: fixed; bottom: 20px; left: 20px; z-index: 40; background: rgba(0,0,0,0.85); padding: 12px 16px; border-radius: 5px; font-weight: bold; font-size: 14px; border: 1px solid #0f0; }
+        
+        /* 支点微調整用の上下左右ボタンパネル */
+        .adjust-panel { position: fixed; bottom: 20px; right: 20px; z-index: 40; display: grid; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px; gap: 5px; }
+        .adj-btn { background: rgba(255,255,255,0.85); color: #000; font-size: 18px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .adj-btn:active { background: #00ffcc; }
+        .btn-up { grid-column: 2; grid-row: 1; }
+        .btn-left { grid-column: 1; grid-row: 2; }
+        .btn-down { grid-column: 2; grid-row: 2; }
+        .btn-right { grid-column: 3; grid-row: 2; }
+
+        .back-btn { position: fixed; top: 20px; right: 20px; z-index: 40; background: #ff4444; color: #fff; border: none; padding: 10px 16px; border-radius: 5px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
-
-    <video id="cameraVideo" autoplay playsinline muted></video>
-    <img id="capturedImage" alt="撮影画像">
-
+    <img id="displayImg" alt="撮影画像">
     <div class="grid-overlay"></div>
-    <div id="levelLine"></div>
-    <div id="info">未開始</div>
-
-    <div class="control-panel">
-        <button id="startSensorBtn" class="btn btn-sensor">📡 カメラ＆センサー有効化</button>
-        <button id="modeBtn" class="btn btn-mode">📐 表示: 水平線</button>
-        <!-- ↕️ グリッド合わせ用の微調整ボタン -->
-        <button id="movePlusBtn" class="btn btn-move">⬆️ 上へ (グリッド合わせ)</button>
-        <button id="moveMinusBtn" class="btn btn-move">⬇️ 下へ (グリッド合わせ)</button>
-        <button id="zeroBtn" class="btn btn-reset-zero">🎯 0度リセット</button>
-        <button id="captureBtn" class="btn btn-capture">📷 撮影</button>
-        <button id="resetBtn" class="btn" style="display:none; background:#ff4444; color:#fff;">🔄 再撮影</button>
+    <canvas id="drawCanvas"></canvas>
+    
+    <div id="status">① 画面をタッチして支点を置く<br>② ボタンで位置調整 / 指でスライドして線を引く</div>
+    
+    <!-- 支点微調整ボタン -->
+    <div class="adjust-panel">
+        <button class="adj-btn btn-up" id="btnUp">⬆️</button>
+        <button class="adj-btn btn-left" id="btnLeft">⬅️</button>
+        <button class="adj-btn btn-down" id="btnDown">⬇️</button>
+        <button class="adj-btn btn-right" id="btnRight">➡️</button>
     </div>
 
-    <canvas id="snapshotCanvas" style="display:none;"></canvas>
-     
-    <script>
-        const cameraVideo = document.getElementById('cameraVideo');
-        const capturedImage = document.getElementById('capturedImage');
-        const levelLine = document.getElementById('levelLine');
-        const info = document.getElementById('info');
-        const startSensorBtn = document.getElementById('startSensorBtn');
-        const modeBtn = document.getElementById('modeBtn');
-        const movePlusBtn = document.getElementById('movePlusBtn');
-        const moveMinusBtn = document.getElementById('moveMinusBtn');
-        const zeroBtn = document.getElementById('zeroBtn');
-        const captureBtn = document.getElementById('captureBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const snapshotCanvas = document.getElementById('snapshotCanvas');
-
-        let baseBeta = null;
-        let baseGamma = null;
-        let stream = null;
-        let currentMode = 'horizontal'; 
-
-        let smoothedBeta = 0;
-        let smoothedGamma = 0;
-        let currentRawBeta = 0;
-        let currentRawGamma = 0;
-        let lastEventTime = Date.now();
-        let autoZeroTimer = null;
-
-        // グリッド線（80px）に合わせた位置オフセット
-        let lineOffset = 0; 
-
-        function playBeep() {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
-                gainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                
-                oscillator.start();
-                oscillator.stop(audioCtx.currentTime + 0.15); 
-            } catch (e) {
-                console.log("音声再生非対応環境");
-            }
-        }
-
-        startSensorBtn.addEventListener('click', async () => {
-            try {
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                }
-
-                const constraints = {
-                    video: {
-                        facingMode: { ideal: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: false
-                };
-
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                } catch (e) {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                }
-
-                cameraVideo.srcObject = stream;
-                
-                await new Promise((resolve) => {
-                    cameraVideo.onloadedmetadata = () => resolve();
-                    setTimeout(resolve, 1000);
-                });
-
-                await cameraVideo.play();
-
-                startSensorBtn.style.display = 'none';
-                captureBtn.style.display = 'inline-block';
-                modeBtn.style.display = 'inline-block';
-                movePlusBtn.style.display = 'inline-block';
-                moveMinusBtn.style.display = 'inline-block';
-                zeroBtn.style.display = 'inline-block';
-
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    if (response === 'granted') {
-                        activateSensor();
-                    } else {
-                        alert("センサーのアクセスが拒否されました。");
-                    }
-                } else {
-                    activateSensor();
-                }
-
-            } catch (err) {
-                alert("カメラを起動できませんでした: " + err.message);
-            }
-        });
-
-        modeBtn.addEventListener('click', () => {
-            if (currentMode === 'horizontal') {
-                currentMode = 'vertical';
-                modeBtn.textContent = '📐 表示: 垂直線';
-                movePlusBtn.textContent = '⬅️ 左へ (グリッド合わせ)';
-                moveMinusBtn.textContent = '➡️ 右へ (グリッド合わせ)';
-            } else {
-                currentMode = 'horizontal';
-                modeBtn.textContent = '📐 表示: 水平線';
-                movePlusBtn.textContent = '⬆️ 上へ (グリッド合わせ)';
-                moveMinusBtn.textContent = '⬇️ 下へ (グリッド合わせ)';
-            }
-            lineOffset = 0; // モード切替時にオフセットをリセット
-            updateLineAndDisplay();
-        });
-
-        // ⬆️ / ⬅️ ボタン（10pxずつ移動、グリッド80pxの途中に合わせやすい）
-        movePlusBtn.addEventListener('click', () => {
-            lineOffset -= 10;
-            updateLineAndDisplay();
-        });
-
-        // ⬇️ / ➡️ ボタン
-        moveMinusBtn.addEventListener('click', () => {
-            lineOffset += 10;
-            updateLineAndDisplay();
-        });
-
-        zeroBtn.addEventListener('click', () => {
-            executeZeroReset();
-
-            if (autoZeroTimer) clearTimeout(autoZeroTimer);
-
-            zeroBtn.style.background = '#00ffcc';
-            zeroBtn.textContent = '⏳ 3秒後自動リセット中...';
-
-            autoZeroTimer = setTimeout(() => {
-                executeZeroReset();
-                playBeep();
-                zeroBtn.style.background = '#ff9800';
-                zeroBtn.textContent = '🎯 0度リセット';
-            }, 3000);
-        });
-
-        function executeZeroReset() {
-            baseBeta = currentRawBeta;
-            baseGamma = currentRawGamma;
-            smoothedBeta = 0;
-            smoothedGamma = 0;
-            info.style.borderColor = '#00ffcc';
-            setTimeout(() => { info.style.borderColor = 'rgba(255,255,255,0.4)'; }, 500);
-            updateLineAndDisplay();
-        }
-
-        function activateSensor() {
-            info.textContent = '計測中...';
-
-            window.addEventListener('deviceorientation', (event) => {
-                let gamma = event.gamma; 
-                let beta = event.beta;   
-
-                if (gamma != null && beta != null) {
-                    lastEventTime = Date.now();
-                    currentRawGamma = gamma;
-                    currentRawBeta = beta;
-
-                    if (baseBeta === null || baseGamma === null) {
-                        baseBeta = beta;
-                        baseGamma = gamma;
-                    }
-
-                    let diffGamma = gamma - baseGamma;
-                    let diffBeta = beta - baseBeta;
-
-                    const LIMIT_ANGLE = 45;
-                    if (diffGamma > LIMIT_ANGLE) diffGamma = LIMIT_ANGLE;
-                    if (diffGamma < -LIMIT_ANGLE) diffGamma = -LIMIT_ANGLE;
-                    if (diffBeta > LIMIT_ANGLE) diffBeta = LIMIT_ANGLE;
-                    if (diffBeta < -LIMIT_ANGLE) diffBeta = -LIMIT_ANGLE;
-
-                    smoothedGamma += (diffGamma - smoothedGamma) * 0.05;
-                    smoothedBeta += (diffBeta - smoothedBeta) * 0.05;
-
-                    updateLineAndDisplay();
-                }
-            });
-
-            setInterval(() => {
-                if (Date.now() - lastEventTime > 1000) {
-                    smoothedGamma = 0;
-                    smoothedBeta = 0;
-                    baseBeta = currentRawBeta;
-                    baseGamma = currentRawGamma;
-                }
-            }, 500);
-        }
-
-        // 📐 線をグリッドに合わせてオフセット（移動）させながら回転
-        function updateLineAndDisplay() {
-            let horizVal = Math.round(smoothedGamma * 10) / 10;
-            let vertVal = Math.round(smoothedBeta * 10) / 10;
-
-            if (currentMode === 'horizontal') {
-                levelLine.style.width = '100vw';
-                levelLine.style.height = '3px';
-                // center基準（50%）から lineOffset（px）だけ上下にずらす
-                levelLine.style.transform = `translate(-50%, calc(-50% + ${lineOffset}px)) rotate(${smoothedGamma}deg)`;
-            } else {
-                levelLine.style.width = '3px';
-                levelLine.style.height = '100vh';
-                // center基準（50%）から lineOffset（px）だけ左右にずらす
-                levelLine.style.transform = `translate(calc(-50% + ${lineOffset}px), -50%) rotate(${smoothedBeta}deg)`;
-            }
-
-            info.innerHTML = `
-                水平ズレ: ${horizVal > 0 ? '+' : ''}${horizVal}°<br>
-                垂直ズレ: ${vertVal > 0 ? '+' : ''}${vertVal}°
-            `;
-        }
-
-        captureBtn.addEventListener('click', () => {
-            snapshotCanvas.width = cameraVideo.videoWidth || window.innerWidth;
-            snapshotCanvas.height = cameraVideo.videoHeight || window.innerHeight;
-            const ctx = snapshotCanvas.getContext('2d');
-            ctx.drawImage(cameraVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
-            
-            capturedImage.src = snapshotCanvas.toDataURL('image/png');
-            capturedImage.style.display = 'block';
-
-            captureBtn.style.display = 'none';
-            modeBtn.style.display = 'none';
-            movePlusBtn.style.display = 'none';
-            moveMinusBtn.style.display = 'none';
-            zeroBtn.style.display = 'none';
-            resetBtn.style.display = 'inline-block';
-        });
-
-        resetBtn.addEventListener('click', () => {
-            capturedImage.style.display = 'none';
-            resetBtn.style.display = 'none';
-            captureBtn.style.display = 'inline-block';
-            modeBtn.style.display = 'inline-block';
-            movePlusBtn.style.display = 'inline-block';
-            moveMinusBtn.style.display = 'inline-block';
-            zeroBtn.style.display = 'inline-block';
-        });
-    </script>
+    <button class="back-btn" onclick="window.history.back()">↩ 撮影に戻る</button>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js');
-            });
+        const img = document.getElementById('displayImg');
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+
+        // キャンバスのピクセル解像度を画面サイズに正確に合わせる
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            redraw();
         }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 撮影画像の読み込み
+        const savedImage = localStorage.getItem('capturedImageData');
+        if (savedImage) {
+            img.src = savedImage;
+        }
+
+        let pivot = null;
+        let currentEnd = null;
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!pivot) return;
+
+            // 支点の描画（大きめの赤丸＋白枠で目立たせる）
+            ctx.beginPath();
+            ctx.arc(pivot.x, pivot.y, 12, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ff0055';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // 終点がある場合は線を引く
+            if (currentEnd) {
+                ctx.beginPath();
+                ctx.moveTo(pivot.x, pivot.y);
+                ctx.lineTo(currentEnd.x, currentEnd.y);
+                ctx.strokeStyle = '#00ffcc';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                let dx = (currentEnd.x - pivot.x) / 80;
+                let dy = (pivot.y - currentEnd.y) / 80;
+                
+                if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+                    let ratio = Math.abs(dy / dx);
+                    let angle = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
+                    status.innerHTML = `
+                        📏 勾配比 1 : ${ratio.toFixed(2)}<br>
+                        📐 角度: ${angle.toFixed(1)}° (横${dx.toFixed(1)}/縦${dy.toFixed(1)})
+                    `;
+                }
+            } else {
+                status.innerHTML = `📍 支点設置完了 (ボタンで微調整可)<br>👉 画面を指でスライドして線を引いてください`;
+            }
+        }
+
+        // 画面タッチ：支点がなければ置く、すでにあればタッチで消去（リセット）
+        canvas.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.adjust-panel') || e.target.closest('.back-btn')) return;
+
+            if (!pivot) {
+                pivot = { x: e.clientX, y: e.clientY };
+                currentEnd = null;
+            } else {
+                pivot = null;
+                currentEnd = null;
+                status.innerHTML = `🗑️ 消去しました。<br>画面をタッチして支点を再配置してください`;
+            }
+            redraw();
+        });
+
+        // 指でスライドして線を伸ばす
+        canvas.addEventListener('pointermove', (e) => {
+            if (!pivot) return;
+            currentEnd = { x: e.clientX, y: e.clientY };
+            redraw();
+        });
+
+        // 上下左右ボタンで支点をピクセル単位で動かす
+        const moveStep = 3; 
+        document.getElementById('btnUp').addEventListener('click', () => { if(pivot) { pivot.y -= moveStep; redraw(); } });
+        document.getElementById('btnDown').addEventListener('click', () => { if(pivot) { pivot.y += moveStep; redraw(); } });
+        document.getElementById('btnLeft').addEventListener('click', () => { if(pivot) { pivot.x -= moveStep; redraw(); } });
+        document.getElementById('btnRight').addEventListener('click', () => { if(pivot) { pivot.x += moveStep; redraw(); } });
     </script>
 </body>
 </html>
