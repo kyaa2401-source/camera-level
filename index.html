@@ -101,7 +101,7 @@
         .btn-move { background: #e91e63; color: #fff; display: none; font-size: 12px; padding: 6px 10px; }
         .btn-reset-zero { background: #ff9800; color: #fff; display: none; }
         
-        /* 初期状態：中央表示（横幅を固定して変動を防ぐ） */
+        /* 中央表示（横幅固定） */
         #info {
             position: fixed;
             top: 50%;
@@ -117,12 +117,12 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.6);
             line-height: 1.6;
             text-align: center;
-            width: 320px; /* 横幅を固定してガタつきを防止 */
+            width: 320px;
             box-sizing: border-box;
             transition: all 0.4s ease;
         }
 
-        /* カメラONになったときに左下へ移動するスタイル（横幅・固定） */
+        /* 左下移動時のスタイル（横幅固定） */
         #info.moved-to-corner {
             top: auto;
             bottom: 20px;
@@ -133,7 +133,7 @@
             border-radius: 6px;
             border-width: 1px;
             text-align: left;
-            width: 220px; /* 左下用の固定幅 */
+            width: 220px;
         }
     </style>
 </head>
@@ -182,7 +182,7 @@
         let lastEventTime = Date.now();
         let autoZeroTimer = null;
         let lineOffset = 0; 
-        let isCameraActive = false; // カメラの状態管理用
+        let isCameraActive = false; 
 
         function playBeep() {
             try {
@@ -204,7 +204,6 @@
             }
         }
 
-        // 1. センサーのみON
         startSensorBtn.addEventListener('click', async () => {
             try {
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -227,10 +226,9 @@
             }
         });
 
-        // 2. カメラON / OFF 切り替えボタン
         startCameraBtn.addEventListener('click', async () => {
             if (!isCameraActive) {
-                // --- カメラONにする処理 ---
+                // --- カメラON ---
                 try {
                     const constraints = {
                         video: {
@@ -268,7 +266,7 @@
                     alert("カメラを起動できませんでした: " + err.message);
                 }
             } else {
-                // --- カメラOFFにする処理 ---
+                // --- カメラOFF ---
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                     stream = null;
@@ -276,7 +274,17 @@
                 cameraVideo.srcObject = null;
                 cameraVideo.style.display = 'none';
 
-                // 表示を中央に戻す（必要に応じて左下のままにする場合はここを調整）
+                // 赤線やグリッド、各種調整ボタンを非課金（非表示）にリセット
+                gridOverlay.style.display = 'none';
+                levelLine.style.display = 'none';
+                modeBtn.style.display = 'none';
+                movePlusBtn.style.display = 'none';
+                moveMinusBtn.style.display = 'none';
+
+                // 赤線表示ボタンを再度出せるように戻す
+                redLineOnBtn.style.display = 'inline-block';
+
+                // 数値表示を中央に戻す
                 info.classList.remove('moved-to-corner');
 
                 isCameraActive = false;
@@ -286,7 +294,6 @@
             }
         });
 
-        // 3. 赤線・グリッド表示ON
         redLineOnBtn.addEventListener('click', () => {
             gridOverlay.style.display = 'block';
             levelLine.style.display = 'block';
