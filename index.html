@@ -21,7 +21,7 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #000;
+            background-color: #111;
             color: #fff;
             font-family: sans-serif;
             overflow: hidden;
@@ -29,7 +29,7 @@
             height: 100vh;
         }
 
-        /* 📹 カメラ映像：全画面ぴったり表示 */
+        /* 📹 カメラ映像：初期は非表示 */
         #cameraVideo {
             position: fixed;
             top: 0;
@@ -38,9 +38,10 @@
             height: 100vh;
             object-fit: cover;
             z-index: 10;
+            display: none; 
         }
 
-        /* 🏁 グリッド線（80px間隔） */
+        /* 🏁 グリッド線：初期は非表示 */
         .grid-overlay {
             position: fixed;
             top: 0;
@@ -54,9 +55,10 @@
             background-position: center center;
             z-index: 20;
             pointer-events: none;
+            display: none;
         }
 
-        /* 🎯 赤い基準線（初期状態は非表示） */
+        /* 🎯 赤い基準線：初期は非表示 */
         #levelLine {
             position: fixed;
             top: 50%;
@@ -95,7 +97,8 @@
             border: none;
             white-space: nowrap;
         }
-        .btn-camera { background: #ffcc00; }
+        .btn-sensor { background: #ffcc00; }
+        .btn-camera { background: #00ffcc; display: none; }
         .btn-redline { background: #ff0055; color: #fff; display: none; }
         .btn-mode { background: #00bcd4; color: #fff; display: none; }
         .btn-move { background: #e91e63; color: #fff; display: none; font-size: 12px; padding: 6px 10px; }
@@ -106,32 +109,32 @@
             bottom: 20px;
             left: 15px;
             z-index: 100000;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: bold;
             background: rgba(0,0,0,0.85);
-            padding: 10px 14px;
+            padding: 12px 16px;
             border-radius: 6px;
             border: 1px solid rgba(255,255,255,0.4);
             box-shadow: 0 2px 4px rgba(0,0,0,0.4);
             line-height: 1.5;
-            display: none; /* 赤線ONにするまで非表示 */
         }
     </style>
 </head>
 <body>
 
     <video id="cameraVideo" autoplay playsinline muted></video>
-
     <div class="grid-overlay"></div>
     <div id="levelLine"></div>
-    <div id="info">未開始</div>
+    
+    <div id="info">未開始（水準器のみ）</div>
 
     <div class="control-panel">
-        <!-- カメラONボタン -->
+        <!-- 1番最初に押すボタン（センサーのみ起動） -->
+        <button id="startSensorBtn" class="btn btn-sensor">📡 センサーのみON（水準器）</button>
+        <!-- 後からカメラや赤線を足せるボタン -->
         <button id="startCameraBtn" class="btn btn-camera">📷 カメラON</button>
-        <!-- 赤線（水準器）ONボタン -->
-        <button id="redLineOnBtn" class="btn btn-redline">🔴 赤線ON（水準器起動）</button>
-        <!-- 各種調整ボタン（最初は非表示） -->
+        <button id="redLineOnBtn" class="btn btn-redline">🔴 赤線・グリッド表示</button>
+        
         <button id="modeBtn" class="btn btn-mode">📐 表示: 水平線</button>
         <button id="movePlusBtn" class="btn btn-move">⬆️ 上へ (グリッド合わせ)</button>
         <button id="moveMinusBtn" class="btn btn-move">⬇️ 下へ (グリッド合わせ)</button>
@@ -140,8 +143,11 @@
 
     <script>
         const cameraVideo = document.getElementById('cameraVideo');
+        const gridOverlay = document.querySelector('.grid-overlay');
         const levelLine = document.getElementById('levelLine');
         const info = document.getElementById('info');
+        
+        const startSensorBtn = document.getElementById('startSensorBtn');
         const startCameraBtn = document.getElementById('startCameraBtn');
         const redLineOnBtn = document.getElementById('redLineOnBtn');
         const modeBtn = document.getElementById('modeBtn');
@@ -183,7 +189,32 @@
         }
 
         // ==========================================
-        // 1. カメラONボタンの処理
+        // 1. センサーのみONボタン（最初に数値だけ動かす）
+        // ==========================================
+        startSensorBtn.addEventListener('click', async () => {
+            try {
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    if (response !== 'granted') {
+                        alert("センサーのアクセスが拒否されました。");
+                        return;
+                    }
+                }
+
+                startSensorBtn.style.display = 'none';
+                startCameraBtn.style.display = 'inline-block';
+                redLineOnBtn.style.display = 'inline-block';
+                zeroBtn.style.display = 'inline-block';
+
+                activateSensor();
+
+            } catch (err) {
+                alert("センサーを起動できませんでした: " + err.message);
+            }
+        });
+
+        // ==========================================
+        // 2. カメラONボタン（後から映像を足す）
         // ==========================================
         startCameraBtn.addEventListener('click', async () => {
             try {
@@ -207,6 +238,7 @@
                 }
 
                 cameraVideo.srcObject = stream;
+                cameraVideo.style.display = 'block';
                 
                 await new Promise((resolve) => {
                     cameraVideo.onloadedmetadata = () => resolve();
@@ -214,10 +246,7 @@
                 });
 
                 await cameraVideo.play();
-
-                // カメラが起動したら「カメラON」を消して「赤線ON」ボタンを表示
                 startCameraBtn.style.display = 'none';
-                redLineOnBtn.style.display = 'inline-block';
 
             } catch (err) {
                 alert("カメラを起動できませんでした: " + err.message);
@@ -225,38 +254,20 @@
         });
 
         // ==========================================
-        // 2. 赤線ONボタン（センサー起動＆水準器表示）の処理
+        // 3. 赤線・グリッド表示ボタン
         // ==========================================
-        redLineOnBtn.addEventListener('click', async () => {
-            try {
-                // iOSのジャイロセンサー許可を安全に取得
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    if (response !== 'granted') {
-                        alert("センサーのアクセスが拒否されました。");
-                        return;
-                    }
-                }
+        redLineOnBtn.addEventListener('click', () => {
+            gridOverlay.style.display = 'block';
+            levelLine.style.display = 'block';
+            redLineOnBtn.style.display = 'none';
 
-                // 赤線と情報表示、調整用ボタンを一斉に表示
-                levelLine.style.display = 'block';
-                info.style.display = 'block';
-                redLineOnBtn.style.display = 'none';
-
-                modeBtn.style.display = 'inline-block';
-                movePlusBtn.style.display = 'inline-block';
-                moveMinusBtn.style.display = 'inline-block';
-                zeroBtn.style.display = 'inline-block';
-
-                activateSensor();
-
-            } catch (err) {
-                alert("センサーを起動できませんでした: " + err.message);
-            }
+            modeBtn.style.display = 'inline-block';
+            movePlusBtn.style.display = 'inline-block';
+            moveMinusBtn.style.display = 'inline-block';
         });
 
         // ==========================================
-        // 3. 各種調整・水準器の動作処理
+        // 4. 各種調整・水準器の動作処理
         // ==========================================
         modeBtn.addEventListener('click', () => {
             if (currentMode === 'horizontal') {
