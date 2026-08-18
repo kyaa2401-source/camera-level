@@ -175,7 +175,6 @@
         let lastEventTime = Date.now();
         let autoZeroTimer = null;
 
-        // グリッド線（80px）に合わせた位置オフセット
         let lineOffset = 0; 
 
         function playBeep() {
@@ -200,6 +199,15 @@
 
         startSensorBtn.addEventListener('click', async () => {
             try {
+                // iOSでのジャイロセンサー許可を最優先で取得する（ユーザーのタップ直後に実行）
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    if (response !== 'granted') {
+                        alert("センサーのアクセスが拒否されました。");
+                        return;
+                    }
+                }
+
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                 }
@@ -235,16 +243,7 @@
                 moveMinusBtn.style.display = 'inline-block';
                 zeroBtn.style.display = 'inline-block';
 
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    if (response === 'granted') {
-                        activateSensor();
-                    } else {
-                        alert("センサーのアクセスが拒否されました。");
-                    }
-                } else {
-                    activateSensor();
-                }
+                activateSensor();
 
             } catch (err) {
                 alert("カメラを起動できませんでした: " + err.message);
@@ -263,17 +262,15 @@
                 movePlusBtn.textContent = '⬆️ 上へ (グリッド合わせ)';
                 moveMinusBtn.textContent = '⬇️ 下へ (グリッド合わせ)';
             }
-            lineOffset = 0; // モード切替時にオフセットをリセット
+            lineOffset = 0;
             updateLineAndDisplay();
         });
 
-        // ⬆️ / ⬅️ ボタン（10pxずつ移動、グリッド80pxの途中に合わせやすい）
         movePlusBtn.addEventListener('click', () => {
             lineOffset -= 10;
             updateLineAndDisplay();
         });
 
-        // ⬇️ / ➡️ ボタン
         moveMinusBtn.addEventListener('click', () => {
             lineOffset += 10;
             updateLineAndDisplay();
@@ -348,7 +345,6 @@
             }, 500);
         }
 
-        // 📐 線をグリッドに合わせてオフセット（移動）させながら回転
         function updateLineAndDisplay() {
             let horizVal = Math.round(smoothedGamma * 10) / 10;
             let vertVal = Math.round(smoothedBeta * 10) / 10;
@@ -356,12 +352,10 @@
             if (currentMode === 'horizontal') {
                 levelLine.style.width = '100vw';
                 levelLine.style.height = '3px';
-                // center基準（50%）から lineOffset（px）だけ上下にずらす
                 levelLine.style.transform = `translate(-50%, calc(-50% + ${lineOffset}px)) rotate(${smoothedGamma}deg)`;
             } else {
                 levelLine.style.width = '3px';
                 levelLine.style.height = '100vh';
-                // center基準（50%）から lineOffset（px）だけ左右にずらす
                 levelLine.style.transform = `translate(calc(-50% + ${lineOffset}px), -50%) rotate(${smoothedBeta}deg)`;
             }
 
