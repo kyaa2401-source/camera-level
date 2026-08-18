@@ -40,17 +40,6 @@
             z-index: 10;
         }
 
-        #capturedImage {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            z-index: 15;
-            display: none;
-        }
-
         /* 🏁 グリッド線（80px間隔） */
         .grid-overlay {
             position: fixed;
@@ -67,7 +56,7 @@
             pointer-events: none;
         }
 
-        /* 🎯 赤い基準線（JavaScriptから位置をピクセル単位で動かせるように設定） */
+        /* 🎯 赤い基準線（初期状態は非表示） */
         #levelLine {
             position: fixed;
             top: 50%;
@@ -79,6 +68,7 @@
             pointer-events: none;
             z-index: 30;
             box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+            display: none; 
         }
 
         .control-panel {
@@ -105,11 +95,11 @@
             border: none;
             white-space: nowrap;
         }
-        .btn-sensor { background: #ffcc00; }
+        .btn-camera { background: #ffcc00; }
+        .btn-redline { background: #ff0055; color: #fff; display: none; }
         .btn-mode { background: #00bcd4; color: #fff; display: none; }
         .btn-move { background: #e91e63; color: #fff; display: none; font-size: 12px; padding: 6px 10px; }
         .btn-reset-zero { background: #ff9800; color: #fff; display: none; }
-        .btn-capture { background: #00ffcc; display: none; }
         
         #info {
             position: fixed;
@@ -124,44 +114,40 @@
             border: 1px solid rgba(255,255,255,0.4);
             box-shadow: 0 2px 4px rgba(0,0,0,0.4);
             line-height: 1.5;
+            display: none; /* 赤線ONにするまで非表示 */
         }
     </style>
 </head>
 <body>
 
     <video id="cameraVideo" autoplay playsinline muted></video>
-    <img id="capturedImage" alt="撮影画像">
 
     <div class="grid-overlay"></div>
     <div id="levelLine"></div>
     <div id="info">未開始</div>
 
     <div class="control-panel">
-        <button id="startSensorBtn" class="btn btn-sensor">📡 カメラ＆センサー有効化</button>
+        <!-- カメラONボタン -->
+        <button id="startCameraBtn" class="btn btn-camera">📷 カメラON</button>
+        <!-- 赤線（水準器）ONボタン -->
+        <button id="redLineOnBtn" class="btn btn-redline">🔴 赤線ON（水準器起動）</button>
+        <!-- 各種調整ボタン（最初は非表示） -->
         <button id="modeBtn" class="btn btn-mode">📐 表示: 水平線</button>
-        <!-- ↕️ グリッド合わせ用の微調整ボタン -->
         <button id="movePlusBtn" class="btn btn-move">⬆️ 上へ (グリッド合わせ)</button>
         <button id="moveMinusBtn" class="btn btn-move">⬇️ 下へ (グリッド合わせ)</button>
         <button id="zeroBtn" class="btn btn-reset-zero">🎯 0度リセット</button>
-        <button id="captureBtn" class="btn btn-capture">📷 撮影</button>
-        <button id="resetBtn" class="btn" style="display:none; background:#ff4444; color:#fff;">🔄 再撮影</button>
     </div>
 
-    <canvas id="snapshotCanvas" style="display:none;"></canvas>
-     
     <script>
         const cameraVideo = document.getElementById('cameraVideo');
-        const capturedImage = document.getElementById('capturedImage');
         const levelLine = document.getElementById('levelLine');
         const info = document.getElementById('info');
-        const startSensorBtn = document.getElementById('startSensorBtn');
+        const startCameraBtn = document.getElementById('startCameraBtn');
+        const redLineOnBtn = document.getElementById('redLineOnBtn');
         const modeBtn = document.getElementById('modeBtn');
         const movePlusBtn = document.getElementById('movePlusBtn');
         const moveMinusBtn = document.getElementById('moveMinusBtn');
         const zeroBtn = document.getElementById('zeroBtn');
-        const captureBtn = document.getElementById('captureBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const snapshotCanvas = document.getElementById('snapshotCanvas');
 
         let baseBeta = null;
         let baseGamma = null;
@@ -174,7 +160,6 @@
         let currentRawGamma = 0;
         let lastEventTime = Date.now();
         let autoZeroTimer = null;
-
         let lineOffset = 0; 
 
         function playBeep() {
@@ -197,17 +182,11 @@
             }
         }
 
-        startSensorBtn.addEventListener('click', async () => {
+        // ==========================================
+        // 1. カメラONボタンの処理
+        // ==========================================
+        startCameraBtn.addEventListener('click', async () => {
             try {
-                // iOSでのジャイロセンサー許可を最優先で取得する（ユーザーのタップ直後に実行）
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    if (response !== 'granted') {
-                        alert("センサーのアクセスが拒否されました。");
-                        return;
-                    }
-                }
-
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                 }
@@ -236,8 +215,34 @@
 
                 await cameraVideo.play();
 
-                startSensorBtn.style.display = 'none';
-                captureBtn.style.display = 'inline-block';
+                // カメラが起動したら「カメラON」を消して「赤線ON」ボタンを表示
+                startCameraBtn.style.display = 'none';
+                redLineOnBtn.style.display = 'inline-block';
+
+            } catch (err) {
+                alert("カメラを起動できませんでした: " + err.message);
+            }
+        });
+
+        // ==========================================
+        // 2. 赤線ONボタン（センサー起動＆水準器表示）の処理
+        // ==========================================
+        redLineOnBtn.addEventListener('click', async () => {
+            try {
+                // iOSのジャイロセンサー許可を安全に取得
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    if (response !== 'granted') {
+                        alert("センサーのアクセスが拒否されました。");
+                        return;
+                    }
+                }
+
+                // 赤線と情報表示、調整用ボタンを一斉に表示
+                levelLine.style.display = 'block';
+                info.style.display = 'block';
+                redLineOnBtn.style.display = 'none';
+
                 modeBtn.style.display = 'inline-block';
                 movePlusBtn.style.display = 'inline-block';
                 moveMinusBtn.style.display = 'inline-block';
@@ -246,10 +251,13 @@
                 activateSensor();
 
             } catch (err) {
-                alert("カメラを起動できませんでした: " + err.message);
+                alert("センサーを起動できませんでした: " + err.message);
             }
         });
 
+        // ==========================================
+        // 3. 各種調整・水準器の動作処理
+        // ==========================================
         modeBtn.addEventListener('click', () => {
             if (currentMode === 'horizontal') {
                 currentMode = 'vertical';
@@ -364,33 +372,6 @@
                 垂直ズレ: ${vertVal > 0 ? '+' : ''}${vertVal}°
             `;
         }
-
-        captureBtn.addEventListener('click', () => {
-            snapshotCanvas.width = cameraVideo.videoWidth || window.innerWidth;
-            snapshotCanvas.height = cameraVideo.videoHeight || window.innerHeight;
-            const ctx = snapshotCanvas.getContext('2d');
-            ctx.drawImage(cameraVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
-            
-            capturedImage.src = snapshotCanvas.toDataURL('image/png');
-            capturedImage.style.display = 'block';
-
-            captureBtn.style.display = 'none';
-            modeBtn.style.display = 'none';
-            movePlusBtn.style.display = 'none';
-            moveMinusBtn.style.display = 'none';
-            zeroBtn.style.display = 'none';
-            resetBtn.style.display = 'inline-block';
-        });
-
-        resetBtn.addEventListener('click', () => {
-            capturedImage.style.display = 'none';
-            resetBtn.style.display = 'none';
-            captureBtn.style.display = 'inline-block';
-            modeBtn.style.display = 'inline-block';
-            movePlusBtn.style.display = 'inline-block';
-            moveMinusBtn.style.display = 'inline-block';
-            zeroBtn.style.display = 'inline-block';
-        });
     </script>
 
     <script>
