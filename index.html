@@ -29,7 +29,6 @@
             height: 100vh;
         }
 
-        /* 📹 カメラ映像：初期は非表示（カメラONで表示） */
         #cameraVideo {
             position: fixed;
             top: 0;
@@ -41,7 +40,6 @@
             display: none; 
         }
 
-        /* 🏁 グリッド線：初期は非表示（赤線・グリッド表示ONで表示） */
         .grid-overlay {
             position: fixed;
             top: 0;
@@ -58,7 +56,6 @@
             display: none;
         }
 
-        /* 🎯 赤い基準線：初期は非表示（赤線・グリッド表示ONで表示） */
         #levelLine {
             position: fixed;
             top: 50%;
@@ -186,7 +183,6 @@
             }
         }
 
-        // 1. センサーのみON（ここで確実にセンサーと数値を有効化）
         startSensorBtn.addEventListener('click', async () => {
             try {
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -209,7 +205,6 @@
             }
         });
 
-        // 2. カメラON
         startCameraBtn.addEventListener('click', async () => {
             try {
                 if (stream) {
@@ -247,7 +242,6 @@
             }
         });
 
-        // 3. 赤線・グリッド表示ON
         redLineOnBtn.addEventListener('click', () => {
             gridOverlay.style.display = 'block';
             levelLine.style.display = 'block';
@@ -257,7 +251,7 @@
             movePlusBtn.style.display = 'inline-block';
             moveMinusBtn.style.display = 'inline-block';
             
-            updateLineAndDisplay(); // 表示した瞬間に位置を反映
+            updateLineAndDisplay();
         });
 
         modeBtn.addEventListener('click', () => {
