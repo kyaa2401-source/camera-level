@@ -143,10 +143,10 @@
     <div class="grid-overlay"></div>
     <div id="levelLine"></div>
     
-    <div id="info">未開始（水準器のみ）</div>
+    <div id="info">未開始（水準器）</div>
 
     <div class="control-panel">
-        <button id="startSensorBtn" class="btn btn-sensor">📡 センサーのみON（水準器）</button>
+        <button id="startSensorBtn" class="btn btn-sensor">📡 （水準器ON）</button>
         <button id="startCameraBtn" class="btn btn-camera">📷 カメラON</button>
         <button id="redLineOnBtn" class="btn btn-redline">🔴 赤線・グリッド表示</button>
         
@@ -259,7 +259,7 @@
                     await cameraVideo.play();
                     
                     isCameraActive = true;
-                    startCameraBtn.textContent = '📷 カメラOFF';
+                    startCameraBtn.textContent = '📷 OFF';
                     startCameraBtn.style.background = '#ff4444';
                     startCameraBtn.style.color = '#fff';
 
@@ -292,7 +292,7 @@
                 info.classList.remove('moved-to-corner');
 
                 isCameraActive = false;
-                startCameraBtn.textContent = '📷 カメラON';
+                startCameraBtn.textContent = '📷 ON';
                 startCameraBtn.style.background = '#00ffcc';
                 startCameraBtn.style.color = '#000';
             }
@@ -387,9 +387,9 @@
                     if (diffGamma < -LIMIT_ANGLE) diffGamma = -LIMIT_ANGLE;
                     if (diffBeta > LIMIT_ANGLE) diffBeta = LIMIT_ANGLE;
                     if (diffBeta < -LIMIT_ANGLE) diffBeta = -LIMIT_ANGLE;
-
-                    smoothedGamma += (diffGamma - smoothedGamma) * 0.05;
-                    smoothedBeta += (diffBeta - smoothedBeta) * 0.05;
+　　　　　　　　　　　// 【変更前】数値の反応速度　0.05（反応が早め）→0.02（遅め）
+                    smoothedGamma += (diffGamma - smoothedGamma) * 0.02;
+                    smoothedBeta += (diffBeta - smoothedBeta) * 0.02;
 
                     updateLineAndDisplay();
                 }
@@ -406,8 +406,8 @@
         }
 
         function updateLineAndDisplay() {
-            let horizVal = Math.round(smoothedGamma * 10) / 10;
-            let vertVal = Math.round(smoothedBeta * 10) / 10;
+            let horizVal = Math.round(smoothedGamma * 10) / 1;　//　水平傾斜　数値の桁　1）/10が２桁　1) /1 が１桁           
+            let vertVal = Math.round(smoothedBeta * 10) / 1;　　//　垂直傾斜　数値の桁　
 
             if (currentMode === 'horizontal') {
                 levelLine.style.width = '100vw';
@@ -420,8 +420,8 @@
             }
 
             info.innerHTML = `
-                水平ズレ: ${horizVal > 0 ? '+' : ''}${horizVal.toFixed(1)}°<br>
-                垂直ズレ: ${vertVal > 0 ? '+' : ''}${vertVal.toFixed(1)}°
+                水平傾斜: ${horizVal > 0 ? '+' : ''}${horizVal.toFixed(1)}°<br>
+                垂直傾斜: ${vertVal > 0 ? '+' : ''}${vertVal.toFixed(1)}°
             `;
         }
     </script>
