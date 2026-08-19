@@ -146,8 +146,8 @@
     <div id="info">未開始（水準器）</div>
 
     <div class="control-panel">
-        <button id="startSensorBtn" class="btn btn-sensor">📡 （水準器ON）</button>
-        <button id="startCameraBtn" class="btn btn-camera">📷 カメラON</button>
+        <button id="startSensorBtn" class="btn btn-sensor">📡 水準器ON</button>
+        <button id="startCameraBtn" class="btn btn-camera">📷 ON</button>
         <button id="redLineOnBtn" class="btn btn-redline">🔴 赤線・グリッド表示</button>
         
         <button id="modeBtn" class="btn btn-mode">📐 表示: 水平線</button>
@@ -406,8 +406,8 @@
         }
 
         function updateLineAndDisplay() {
-            let horizVal = Math.round(smoothedGamma * 10) / 1;　//　水平傾斜　数値の桁　1）/10が２桁　1) /1 が１桁           
-            let vertVal = Math.round(smoothedBeta * 10) / 1;　　//　垂直傾斜　数値の桁　
+            let horizVal = Math.round(smoothedGamma * 1) / 1;　//　水平傾斜　数値の桁　10）/10が２桁　1) /1 が１桁           
+            let vertVal = Math.round(smoothedBeta * 1) / 1;　　//　垂直傾斜　数値の桁　
 
             if (currentMode === 'horizontal') {
                 levelLine.style.width = '100vw';
