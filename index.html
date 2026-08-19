@@ -204,6 +204,7 @@
             }
         }
 
+        // センサーのみON（ここではカメラボタンだけ出す）
         startSensorBtn.addEventListener('click', async () => {
             try {
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -216,8 +217,7 @@
 
                 startSensorBtn.style.display = 'none';
                 startCameraBtn.style.display = 'inline-block';
-                redLineOnBtn.style.display = 'inline-block';
-                zeroBtn.style.display = 'inline-block';
+                // ※ここでは赤線ボタンや0度リセットボタンはまだ出さない仕様に変更
 
                 activateSensor();
 
@@ -226,6 +226,7 @@
             }
         });
 
+        // カメラON / OFF 切り替えボタン
         startCameraBtn.addEventListener('click', async () => {
             if (!isCameraActive) {
                 // --- カメラON ---
@@ -262,6 +263,10 @@
                     startCameraBtn.style.background = '#ff4444';
                     startCameraBtn.style.color = '#fff';
 
+                    // ★カメラONにしたときに「赤線・グリッド表示ボタン」と「0度リセットボタン」を表示する
+                    redLineOnBtn.style.display = 'inline-block';
+                    zeroBtn.style.display = 'inline-block';
+
                 } catch (err) {
                     alert("カメラを起動できませんでした: " + err.message);
                 }
@@ -274,15 +279,14 @@
                 cameraVideo.srcObject = null;
                 cameraVideo.style.display = 'none';
 
-                // 赤線やグリッド、各種調整ボタンを非課金（非表示）にリセット
+                // 赤線やグリッド、各種調整ボタンを非表示にリセット
                 gridOverlay.style.display = 'none';
                 levelLine.style.display = 'none';
+                redLineOnBtn.style.display = 'none';
+                zeroBtn.style.display = 'none';
                 modeBtn.style.display = 'none';
                 movePlusBtn.style.display = 'none';
                 moveMinusBtn.style.display = 'none';
-
-                // 赤線表示ボタンを再度出せるように戻す
-                redLineOnBtn.style.display = 'inline-block';
 
                 // 数値表示を中央に戻す
                 info.classList.remove('moved-to-corner');
