@@ -406,6 +406,7 @@
         }
 
         function updateLineAndDisplay() {
+
             let horizVal = Math.round(smoothedGamma * 1) / 1;　//　水平傾斜　数値の桁　10）/10が２桁　1) /1 が１桁           
             let vertVal = Math.round(smoothedBeta * 1) / 1;　　//　垂直傾斜　数値の桁　
 
@@ -418,10 +419,10 @@
                 levelLine.style.height = '100vh';
                 levelLine.style.transform = `translate(calc(-50% + ${lineOffset}px), -50%) rotate(${smoothedBeta}deg)`;
             }
-
+           // 数値桁　toFixed(1)→toFixed(0)へ変更
             info.innerHTML = `
-                水平傾斜: ${horizVal > 0 ? '+' : ''}${horizVal.toFixed(1)}°<br>
-                垂直傾斜: ${vertVal > 0 ? '+' : ''}${vertVal.toFixed(1)}°
+                水平傾斜: ${horizVal > 0 ? '+' : ''}${horizVal.toFixed(0)}°<br> 
+                垂直傾斜: ${vertVal > 0 ? '+' : ''}${vertVal.toFixed(0)}°
             `;
         }
     </script>
